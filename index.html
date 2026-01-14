@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Smart Polytunnel</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #e8f5e9;
+    }
+
+    h1 {
+      text-align: center;
+      padding: 15px;
+      background: #2e7d32;
+      color: white;
+      margin: 0;
+    }
+
+    .container {
+      padding: 15px;
+      display: grid;
+      gap: 15px;
+    }
+
+    .card {
+      background: white;
+      padding: 15px;
+      border-radius: 12px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+    }
+
+    label {
+      font-weight: bold;
+    }
+
+    input {
+      width: 100%;
+      padding: 8px;
+      margin: 5px 0 10px;
+      font-size: 16px;
+    }
+
+    button {
+      width: 100%;
+      padding: 12px;
+      font-size: 16px;
+      border: none;
+      border-radius: 8px;
+      margin-top: 8px;
+      background: #2e7d32;
+      color: white;
+      cursor: pointer;
+    }
+
+    button.off {
+      background: #b71c1c;
+    }
+
+    .status {
+      text-align: center;
+      font-weight: bold;
+      margin-top: 10px;
+    }
+  </style>
+</head>
+
+<body>
+
+<h1>🌱 Smart Polytunnel</h1>
+
+<div class="container">
+
+  <!-- SENSOR VALUES -->
+  <div class="card">
+    <h3>📊 Sensor Readings</h3>
+    <p>Temperature: <span id="tempVal">--</span> °C</p>
+    <p>Humidity: <span id="humVal">--</span> %</p>
+  </div>
+
+  <!-- SET VALUES -->
+  <div class="card">
+    <h3>🎯 Perfect Values</h3>
+
+    <label>Set Temperature</label>
+    <input type="number" id="setTemp">
+
+    <label>Set Humidity</label>
+    <input type="number" id="setHum">
+
+    <button onclick="saveSetpoints()">Save Values</button>
+
+    <div class="status" id="sprinklerStatus">🚿 Sprinkler: OFF</div>
+  </div>
+
+  <!-- MANUAL CONTROLS -->
+  <div class="card">
+    <h3>🧪 Fertilizer Pumps</h3>
+    <button id="pump1Btn" onclick="toggle('fertilizer_pump_1', this)">Pump 1</button>
+    <button id="pump2Btn" onclick="toggle('fertilizer_pump_2', this)">Pump 2</button>
+  </div>
+
+  <div class="card">
+    <h3>💡 Lighting</h3>
+    <button id="lightBtn" onclick="toggle('light_1', this)">Light 1</button>
+  </div>
+
+</div>
+
+<!-- FIREBASE -->
+<script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-database-compat.js"></script>
+
+<script>
+  const firebaseConfig = {
+     apiKey: "AIzaSyAEmZeFuHXoG-T7qDSBAyeTTS5ks_-6GGw",
+  authDomain: "polytunnel-3502e.firebaseapp.com",
+  databaseURL: "https://polytunnel-3502e-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "polytunnel-3502e",
+  storageBucket: "polytunnel-3502e.firebasestorage.app",
+  messagingSenderId: "1060943625448",
+  appId: "1:1060943625448:web:12269c7b4170e7cf875d5d"
+  };
+
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.database();
+
+  const base = db.ref("/POLYTUNNEL");
+
+  // LIVE SENSOR VALUES
+  base.child("temperature").on("value", s => {
+    document.getElementById("tempVal").innerText = s.val();
+    checkAuto();
+  });
+
+  base.child("humidity").on("value", s => {
+    document.getElementById("humVal").innerText = s.val();
+    checkAuto();
+  });
+
+  // LOAD SETPOINTS
+  base.child("set_temp").on("value", s => {
+    document.getElementById("setTemp").value = s.val();
+  });
+
+  base.child("set_humidity").on("value", s => {
+    document.getElementById("setHum").value = s.val();
+  });
+
+  function saveSetpoints() {
+    base.update({
+      set_temp: Number(setTemp.value),
+      set_humidity: Number(setHum.value)
+    });
+  }
+
+  // AUTO SPRINKLER
+  function checkAuto() {
+    base.once("value", snap => {
+      const d = snap.val();
+      if (!d) return;
+
+      const okTemp = Math.abs(d.temperature - d.set_temp) <= 1;
+      const okHum = Math.abs(d.humidity - d.set_humidity) <= 3;
+
+      if (okTemp && okHum) {
+        base.child("sprinkler").set(true);
+        sprinklerStatus.innerText = "🚿 Sprinkler: ON (AUTO)";
+        sprinklerStatus.style.color = "green";
+      } else {
+        base.child("sprinkler").set(false);
+        sprinklerStatus.innerText = "🚿 Sprinkler: OFF";
+        sprinklerStatus.style.color = "red";
+      }
+    });
+  }
+
+  // TOGGLE BUTTONS
+  function toggle(path, btn) {
+    base.child(path).get().then(s => {
+      base.child(path).set(!s.val());
+    });
+  }
+
+  function syncButton(path, btn) {
+    base.child(path).on("value", s => {
+      btn.innerText = btn.innerText.split(":")[0] + ": " + (s.val() ? "ON" : "OFF");
+      btn.className = s.val() ? "" : "off";
+    });
+  }
+
+  syncButton("fertilizer_pump_1", pump1Btn);
+  syncButton("fertilizer_pump_2", pump2Btn);
+  syncButton("light_1", lightBtn);
+</script>
+
+</body>
+</html>
